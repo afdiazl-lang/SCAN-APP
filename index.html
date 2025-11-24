@@ -213,7 +213,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v2.1</h1>
+        <h1>📦 Scanner de Guías v2.2</h1>
 
         <!-- SECCIÓN DE CARGA DESDE LA NUBE -->
         <div class="section" id="cloud-load-section">
@@ -612,29 +612,39 @@
 
         restartScanBtn.addEventListener('click', () => {
             reportSection.style.display = 'none';
+            prepareAndStartScanner();
         });
 
         // --- Lógica del Scanner ---
         async function startScanner() {
             isScanning = true;
             try {
+                // CORRECCIÓN: Asegurar que la lista de cámaras se carga una sola vez
                 if (videoInputDevices.length === 0) {
                     videoInputDevices = await codeReader.listVideoInputDevices();
-                    const rearCameraIndex = videoInputDevices.findIndex(device => /back|rear|trasera/i.test(device.label));
-                    currentDeviceIndex = rearCameraIndex > -1 ? rearCameraIndex : 0;
                     switchCamBtn.style.display = videoInputDevices.length > 1 ? 'inline-block' : 'none';
                 }
-                selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
                 
                 // --- OPTIMIZACIÓN DE LA CÁMARA ---
-                // 3. Definir una resolución de video óptima para el escaneo
+                // CORRECCIÓN: Lógica de selección de cámara robusta
+                // CORRECCIÓN: Priorizar la cámara trasera usando facingMode
                 const constraints = {
                     video: {
-                        deviceId: { exact: selectedDeviceId },
                         width: { ideal: 1280 },
                         height: { ideal: 720 }
                     }
                 };
+
+                // Si el usuario ya ha seleccionado una cámara, usar esa.
+                // Si no, la primera vez se usará el facingMode para la trasera.
+                if (selectedDeviceId) {
+                    constraints.video.deviceId = { exact: selectedDeviceId };
+                } else {
+                    // La primera vez, el navegador elegirá la cámara trasera gracias a facingMode.
+                    // En los siguientes cambios, selectedDeviceId ya tendrá un valor.
+                    constraints.video.facingMode = { ideal: 'environment' };
+                }
+
                 codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
                     if (result) {
                         codeReader.reset();
