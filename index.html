@@ -186,7 +186,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías</h1>
+        <h1>📦 Scanner de Guías v1.0</h1>
 
         <!-- SECCIÓN 1: Carga de Archivo -->
         <div class="section" id="upload-section">
@@ -486,7 +486,7 @@
 
             if (sessionData) {
                 try {
-                const compressed = atob(decodeURIComponent(sessionData)); // Decodificación segura desde URL
+                const compressed = atob(decodeURIComponent(sessionData)); // CORRECCIÓN: Aplicar la decodificación que faltaba
                 const jsonString = pako.inflate(compressed, { to: 'string' });
                 const dataArray = JSON.parse(jsonString);
 
