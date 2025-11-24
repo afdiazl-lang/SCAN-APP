@@ -213,7 +213,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.6</h1>
+        <h1>📦 Scanner de Guías v1.8</h1>
 
         <!-- SECCIÓN DE CARGA DE SESIÓN MANUAL -->
         <div class="section" id="session-load-section">
@@ -478,7 +478,7 @@
             
             const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
             const jsonString = JSON.stringify(dataArray);
-            const encodedData = btoa(unescape(encodeURIComponent(jsonString)));
+            const encodedData = btoa(unescape(encodeURIComponent(jsonString))); // Codificación segura para caracteres Unicode
 
             navigator.clipboard.writeText(encodedData).then(() => {
                 alert("✅ Sesión copiada al portapapeles.\n\nPega este texto en tu celular (usando WhatsApp, Notas, etc.) y cárgalo en la sección 'Cargar Sesión Manual'.");
@@ -512,7 +512,7 @@
             }
 
             try {
-                const jsonString = decodeURIComponent(escape(atob(sessionData)));
+                const jsonString = decodeURIComponent(escape(atob(sessionData))); // Decodificación segura para caracteres Unicode
                 const dataArray = JSON.parse(jsonString);
 
                 guidesData.clear();
