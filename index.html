@@ -213,7 +213,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.8</h1>
+        <h1>📦 Scanner de Guías v1.9</h1>
 
         <!-- SECCIÓN DE CARGA DE SESIÓN MANUAL -->
         <div class="section" id="session-load-section">
@@ -349,10 +349,9 @@
 
             const reader = new FileReader();
             reader.onload = function(e) {
+                // Reiniciar la interfaz al cargar un nuevo archivo
+                resetUI();
                 try {
-                    // Reiniciar la interfaz al cargar un nuevo archivo
-                    resetUI();
-
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
@@ -476,16 +475,26 @@
                 return;
             }
             
-            const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
-            const jsonString = JSON.stringify(dataArray);
-            const encodedData = btoa(unescape(encodeURIComponent(jsonString))); // Codificación segura para caracteres Unicode
+            try {
+                const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
+                const jsonString = JSON.stringify(dataArray);
 
-            navigator.clipboard.writeText(encodedData).then(() => {
-                alert("✅ Sesión copiada al portapapeles.\n\nPega este texto en tu celular (usando WhatsApp, Notas, etc.) y cárgalo en la sección 'Cargar Sesión Manual'.");
-            }).catch(err => {
-                alert("Error al copiar la sesión. Inténtalo de nuevo.");
-                console.error('Error al copiar:', err);
-            });
+                // Solución moderna y robusta para codificar a Base64 con soporte Unicode
+                const encoder = new TextEncoder();
+                const data = encoder.encode(jsonString);
+                const base64String = btoa(String.fromCharCode.apply(null, data));
+
+                navigator.clipboard.writeText(base64String).then(() => {
+                    alert("✅ Sesión copiada al portapapeles.\n\nPega este texto en tu celular (usando WhatsApp, Notas, etc.) y cárgalo en la sección 'Cargar Sesión Manual'.");
+                }).catch(err => {
+                    alert("Error al copiar la sesión. Inténtalo de nuevo.");
+                    console.error('Error al copiar:', err);
+                });
+
+            } catch (e) {
+                console.error("Error al generar la sesión:", e);
+                alert("Ocurrió un error al generar la sesión para copiar.");
+            }
         });
 
         function prepareAndStartScanner() {
@@ -512,10 +521,20 @@
             }
 
             try {
-                const jsonString = decodeURIComponent(escape(atob(sessionData))); // Decodificación segura para caracteres Unicode
+                // Reiniciar estado antes de cargar nueva sesión
+                sobrantes.clear();
+                scannedPieces = 0;
+                guidesData.clear();
+
+                // Solución moderna y robusta para decodificar desde Base64 con soporte Unicode
+                const binaryString = atob(sessionData);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                const jsonString = new TextDecoder().decode(bytes);
                 const dataArray = JSON.parse(jsonString);
 
-                guidesData.clear();
                 dataArray.forEach(item => {
                     const { id, ...rest } = item;
                     guidesData.set(id, rest);
@@ -571,12 +590,13 @@
                     if (result) {
                         codeReader.reset();
                         handleScanResult(result.getText());
-                        
-                        setTimeout(() => {
-                            if (isScanning) {
-                                startScanner();
-                            }
-                        }, 2000);
+
+                        // Solo reiniciar el scanner si isScanning sigue activo
+                        if (isScanning) {
+                            setTimeout(() => {
+                                if (isScanning) startScanner();
+                            }, 2000);
+                        }
                     }
                     if (err && !(err instanceof ZXing.NotFoundException)) {
                         console.error(err);
@@ -595,10 +615,13 @@
 
             if (guide) {
                 if (guide.scannedCount >= guide.piezas) {
+                    errorSound.currentTime = 0;
+                    errorSound.play();
                     if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                     showResultPopup(`GUÍA COMPLETA: ${scannedCode}`, `Ya se escanearon todas las piezas (${guide.piezas}/${guide.piezas})`, 'warning');
                 } else {
-                    if (navigator.vibrate) navigator.vibrate(100);
+                    successSound.currentTime = 0;
+                    successSound.play();
                     guide.scannedCount++;
                     scannedPieces++;
                     if (guide.scannedCount === guide.piezas) {
@@ -607,10 +630,13 @@
                         guide.status = 'incompleto';
                     }
                     showResultPopup(`GUÍA: ${scannedCode}`, `Dest: ${guide.destinatario} | Piezas: ${guide.scannedCount}/${guide.piezas}`, 'success');
+                    if (navigator.vibrate) navigator.vibrate(100);
                     progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
                 }
             } else {
+                errorSound.currentTime = 0;
                 if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                errorSound.play();
                 sobrantes.add(scannedCode);
                 showResultPopup(`SOBRANTE: ${scannedCode}`, 'Esta guía no está en la lista cargada.', 'error');
             }
