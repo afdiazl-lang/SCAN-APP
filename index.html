@@ -465,7 +465,7 @@
             const jsonString = JSON.stringify(dataArray);
 
             const compressed = pako.deflate(jsonString, { to: 'string' });
-            const encodedData = btoa(compressed);
+            const encodedData = encodeURIComponent(btoa(compressed)); // Codificación segura para URL
 
             const url = new URL(window.location.href);
             url.searchParams.set('session', encodedData);
@@ -486,7 +486,7 @@
 
             if (sessionData) {
                 try {
-                const compressed = atob(sessionData);
+                const compressed = atob(decodeURIComponent(sessionData)); // Decodificación segura desde URL
                 const jsonString = pako.inflate(compressed, { to: 'string' });
                 const dataArray = JSON.parse(jsonString);
 
