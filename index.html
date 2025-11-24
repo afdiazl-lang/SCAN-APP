@@ -213,7 +213,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v2.0</h1>
+        <h1>📦 Scanner de Guías v2.1</h1>
 
         <!-- SECCIÓN DE CARGA DESDE LA NUBE -->
         <div class="section" id="cloud-load-section">
@@ -300,7 +300,17 @@
         let sobrantes = new Set();
         let totalPieces = 0;
         let scannedPieces = 0;
-        const codeReader = new ZXing.BrowserMultiFormatReader();
+        
+        // --- OPTIMIZACIÓN DEL SCANNER ---
+        // 1. Definir los formatos de código de barras a buscar (para acelerar la detección)
+        const hints = new Map();
+        const formats = [ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.QR_CODE, ZXing.BarcodeFormat.DATA_MATRIX];
+        hints.set(ZXing.BarcodeFormat.POSSIBLE_FORMATS, formats);
+
+        // 2. Inicializar el lector con los formatos específicos
+        const codeReader = new ZXing.BrowserMultiFormatReader(hints);
+        // --- FIN DE OPTIMIZACIÓN ---
+
         let isScanning = false;
         let selectedDeviceId;
         let videoInputDevices = [];
@@ -526,12 +536,18 @@
             previewSection.style.display = 'none';
             cloudLoadSection.style.display = 'none';
             scannerSection.style.display = 'block';
+            reportSection.style.display = 'none';
+            restartScanBtn.style.display = 'none';
             
+            // --- CORRECCIÓN: Recalcular el progreso al reanudar ---
             totalPieces = 0;
+            scannedPieces = 0; // Reiniciar y recalcular
             guidesData.forEach(guide => {
                 totalPieces += guide.piezas;
+                scannedPieces += guide.scannedCount; // Sumar las piezas ya escaneadas
             });
             progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
+            // --- FIN DE CORRECCIÓN ---
 
             startScanner();
         }
@@ -596,8 +612,6 @@
 
         restartScanBtn.addEventListener('click', () => {
             reportSection.style.display = 'none';
-            restartScanBtn.style.display = 'none'; // Ocultar el botón de reinicio
-            prepareAndStartScanner();
         });
 
         // --- Lógica del Scanner ---
@@ -612,7 +626,16 @@
                 }
                 selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
                 
-                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                // --- OPTIMIZACIÓN DE LA CÁMARA ---
+                // 3. Definir una resolución de video óptima para el escaneo
+                const constraints = {
+                    video: {
+                        deviceId: { exact: selectedDeviceId },
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                };
+                codeReader.decodeFromConstraints(constraints, 'video', (result, err) => {
                     if (result) {
                         codeReader.reset();
                         handleScanResult(result.getText());
@@ -655,7 +678,7 @@
                     } else {
                         guide.status = 'incompleto';
                     }
-                    showResultPopup(`GUÍA: ${scannedCode}`, `Dest: ${guide.destinatario} | Piezas: ${guide.scannedCount}/${guide.piezas}`, 'success');
+                    showResultPopup(`Dest: ${guide.destinatario}`, `GUÍA: ${scannedCode} | Piezas: ${guide.scannedCount}/${guide.piezas}`, 'success');
                     if (navigator.vibrate) navigator.vibrate(100);
                     progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
                 }
