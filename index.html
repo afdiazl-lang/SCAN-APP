@@ -213,7 +213,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.3</h1>
+        <h1>📦 Scanner de Guías v1.4</h1>
 
         <!-- SECCIÓN 1: Carga de Archivo -->
         <div class="section" id="upload-section">
@@ -289,6 +289,7 @@
 
     <!-- Librerías JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
     <script>
@@ -561,7 +562,7 @@
 
         restartScanBtn.addEventListener('click', () => {
             reportSection.style.display = 'none';
-            restartScanBtn.style.display = 'none';
+            restartScanBtn.style.display = 'none'; // Ocultar el botón de reinicio
             prepareAndStartScanner();
         });
 
