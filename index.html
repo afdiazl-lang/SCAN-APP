@@ -143,6 +143,27 @@
             transform: translateY(-100%);
             transition: transform 0.5s ease;
         }
+        #viewfinder {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 40%;
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+        }
+        #viewfinder::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: red;
+            animation: scan-line 2s infinite;
+        }
         #scan-result.success { background: #28a745; }
         #scan-result.error { background: #dc3545; }
         #scan-result.warning { background: #ffc107; }
@@ -181,12 +202,18 @@
         .completados-title { color: #28a745; }
         .faltantes-title { color: #dc3545; }
         .sobrantes-title { color: #ffc107; }
+
+        @keyframes scan-line {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.2</h1>
+        <h1>📦 Scanner de Guías v1.3</h1>
 
         <!-- SECCIÓN 1: Carga de Archivo -->
         <div class="section" id="upload-section">
@@ -223,6 +250,7 @@
             <div id="video-container">
                 <video id="video" playsinline></video>
                 <!-- Pop-up de resultado de escaneo -->
+                <div id="viewfinder"></div>
                 <div id="scan-result">
                     <h3 id="result-title">GUÍA ENCONTRADA</h3>
                     <p id="result-details">Destinatario: Juan Perez | Piezas: 1/3</p>
@@ -239,7 +267,7 @@
         <div class="section" id="report-section" style="display: none;">
             <h2>Reporte Final</h2>
             
-            <h3 class="completados-title">✅ Guías Completadas</h3>
+            <h3 class="completados-title" id="completados-summary">✅ Guías Completadas: 0/0</h3>
             <ul id="completados-list">
             </ul>
 
@@ -251,6 +279,8 @@
             <ul id="sobrantes-list">
             </ul>
         </div>
+
+        <button id="restart-scan-btn" style="display: none; margin-top: 20px;">Continuar Escaneando</button>
     </div>
 
     <!-- Elementos de Audio -->
@@ -259,7 +289,6 @@
 
     <!-- Librerías JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
     <script>
@@ -285,6 +314,7 @@
         const videoElement = document.getElementById('video');
         const successSound = document.getElementById('success-sound');
         const errorSound = document.getElementById('error-sound');
+        const restartScanBtn = document.getElementById('restart-scan-btn');
         const finishScanBtn = document.getElementById('finish-scan-btn');
         const reportSection = document.getElementById('report-section');
         const completadosList = document.getElementById('completados-list');
@@ -296,6 +326,7 @@
         const switchCamBtn = document.getElementById('switch-cam-btn');
         const qrSection = document.getElementById('qr-section');
         const qrCodeDiv = document.getElementById('qrcode');
+        const completadosSummary = document.getElementById('completados-summary');
 
         document.addEventListener('DOMContentLoaded', () => {
             checkForSessionData();
@@ -528,6 +559,12 @@
             }
         });
 
+        restartScanBtn.addEventListener('click', () => {
+            reportSection.style.display = 'none';
+            restartScanBtn.style.display = 'none';
+            prepareAndStartScanner();
+        });
+
         // --- Lógica del Scanner ---
         async function startScanner() {
             isScanning = true;
@@ -568,9 +605,10 @@
 
             if (guide) {
                 if (guide.scannedCount >= guide.piezas) {
+                    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                     showResultPopup(`GUÍA COMPLETA: ${scannedCode}`, `Ya se escanearon todas las piezas (${guide.piezas}/${guide.piezas})`, 'warning');
-                    errorSound.play();
                 } else {
+                    if (navigator.vibrate) navigator.vibrate(100);
                     guide.scannedCount++;
                     scannedPieces++;
                     if (guide.scannedCount === guide.piezas) {
@@ -579,13 +617,12 @@
                         guide.status = 'incompleto';
                     }
                     showResultPopup(`GUÍA: ${scannedCode}`, `Dest: ${guide.destinatario} | Piezas: ${guide.scannedCount}/${guide.piezas}`, 'success');
-                    successSound.play();
                     progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
                 }
             } else {
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                 sobrantes.add(scannedCode);
                 showResultPopup(`SOBRANTE: ${scannedCode}`, 'Esta guía no está en la lista cargada.', 'error');
-                errorSound.play();
             }
         }
 
@@ -621,23 +658,28 @@
             scannerSection.style.display = 'none';
             reportSection.style.display = 'block';
 
+            // Limpiar listas y preparar resumen
             completadosList.innerHTML = '';
             faltantesList.innerHTML = '';
             sobrantesList.innerHTML = '';
+            let completadasCount = 0;
 
             guidesData.forEach((guide, guideId) => {
                 if (guide.status === 'completo') {
-                    completadosList.innerHTML += `<li>${guideId}</li>`;
+                    completadasCount++;
                 } else {
                     const faltan = guide.piezas - guide.scannedCount;
-                    faltantesList.innerHTML += `<li>${guideId} (Faltan ${faltan} de ${guide.piezas})</li>`;
+                    faltantesList.innerHTML += `<li><strong>${guideId}</strong> - Dest: ${guide.destinatario} | Faltan ${faltan} de ${guide.piezas} | Peso: ${guide.peso}</li>`;
                 }
             });
+
+            completadosSummary.textContent = `✅ Guías Completadas: ${completadasCount}/${guidesData.size}`;
 
             sobrantes.forEach(sobranteId => {
                 sobrantesList.innerHTML += `<li>${sobranteId}</li>`;
             });
 
+            restartScanBtn.style.display = 'block';
             alert("Proceso de escaneo finalizado. El reporte está listo.");
         });
     </script>
