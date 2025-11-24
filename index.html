@@ -133,19 +133,19 @@
             top: 0;
             left: 0;
             right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.75);
+            color: white;
             display: none; /* Oculto por defecto */
-            align-items: center;
-            justify-content: center;
             text-align: center;
-            font-size: 1.5em;
-            padding: 20px;
-            flex-direction: column;
+            font-size: 1.2em;
+            padding: 15px;
+            z-index: 10;
+            transform: translateY(-100%);
+            transition: transform 0.5s ease;
         }
-        #scan-result.success { border: 5px solid #28a745; }
-        #scan-result.error { border: 5px solid #dc3545; }
-        #scan-result.warning { border: 5px solid #ffc107; }
+        #scan-result.success { background: #28a745; }
+        #scan-result.error { background: #dc3545; }
+        #scan-result.warning { background: #ffc107; }
 
         #scan-result h3 { margin: 0; }
         #scan-result p { margin: 5px 0 0 0; font-size: 0.8em; }
@@ -186,7 +186,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.1</h1>
+        <h1>📦 Scanner de Guías v1.2</h1>
 
         <!-- SECCIÓN 1: Carga de Archivo -->
         <div class="section" id="upload-section">
@@ -229,7 +229,10 @@
                 </div>
             </div>
 
-            <button id="finish-scan-btn" class="finish-btn">Finalizar</button>
+            <div class="button-group" style="justify-content: center;">
+                <button id="switch-cam-btn">🔄 Cambiar Cámara</button>
+                <button id="finish-scan-btn" class="finish-btn">Finalizar</button>
+            </div>
         </div>
 
         <!-- SECCIÓN 4: Reporte Final -->
@@ -268,6 +271,8 @@
         const codeReader = new ZXing.BrowserMultiFormatReader();
         let isScanning = false;
         let selectedDeviceId;
+        let videoInputDevices = [];
+        let currentDeviceIndex = 0;
 
         // --- Elementos del DOM ---
         const fileInput = document.getElementById('file-input');
@@ -288,6 +293,7 @@
         const addRowBtn = document.getElementById('add-row-btn');
         const startLocalScanBtn = document.getElementById('start-local-scan-btn');
         const generateQrBtn = document.getElementById('generate-qr-btn');
+        const switchCamBtn = document.getElementById('switch-cam-btn');
         const qrSection = document.getElementById('qr-section');
         const qrCodeDiv = document.getElementById('qrcode');
 
@@ -463,7 +469,7 @@
             const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
             const jsonString = JSON.stringify(dataArray);
 
-            const encodedData = encodeURIComponent(btoa(unescape(encodeURIComponent(jsonString)))); // Codificación segura para URL sin compresión
+            const encodedData = encodeURIComponent(btoa(unescape(encodeURIComponent(jsonString))));
 
             const url = new URL(window.location.href);
             url.searchParams.set('session', encodedData);
@@ -484,7 +490,7 @@
 
             if (sessionData) {
                 try {
-                const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(sessionData)))); // Decodificación segura sin compresión
+                const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(sessionData))));
                 const dataArray = JSON.parse(jsonString);
 
                 guidesData.clear();
@@ -512,12 +518,27 @@
             XLSX.writeFile(workbook, "Plantilla_Scanner.xlsx");
         }
 
+        // --- Lógica de la Cámara ---
+        switchCamBtn.addEventListener('click', () => {
+            if (videoInputDevices.length > 1) {
+                currentDeviceIndex = (currentDeviceIndex + 1) % videoInputDevices.length;
+                selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
+                codeReader.reset();
+                startScanner();
+            }
+        });
+
         // --- Lógica del Scanner ---
         async function startScanner() {
             isScanning = true;
             try {
-                const videoInputDevices = await codeReader.listVideoInputDevices();
-                selectedDeviceId = videoInputDevices[0].deviceId;
+                if (videoInputDevices.length === 0) {
+                    videoInputDevices = await codeReader.listVideoInputDevices();
+                    const rearCameraIndex = videoInputDevices.findIndex(device => /back|rear|trasera/i.test(device.label));
+                    currentDeviceIndex = rearCameraIndex > -1 ? rearCameraIndex : 0;
+                    switchCamBtn.style.display = videoInputDevices.length > 1 ? 'inline-block' : 'none';
+                }
+                selectedDeviceId = videoInputDevices[currentDeviceIndex].deviceId;
                 
                 codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
                     if (result) {
@@ -578,10 +599,11 @@
             
             resultDiv.className = '';
             resultDiv.classList.add(type);
-            resultDiv.style.display = 'flex';
+            resultDiv.style.display = 'block';
+            resultDiv.style.transform = 'translateY(0)';
 
             setTimeout(() => {
-                resultDiv.style.display = 'none';
+                resultDiv.style.transform = 'translateY(-100%)';
             }, 6000);
         }
 
