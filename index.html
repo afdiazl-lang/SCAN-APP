@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Guías</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1c1e21;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #007bff;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .finish-btn {
+            background-color: #28a745;
+        }
+        .finish-btn:hover {
+            background-color: #218838;
+        }
+        .add-btn {
+            background-color: #17a2b8;
+        }
+        .add-btn:hover {
+            background-color: #138496;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+        .excel-preview {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        .excel-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .excel-preview th, .excel-preview td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .excel-preview th {
+            background-color: #4CAF50;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+        .excel-preview input {
+            width: 100%;
+            border: none;
+            padding: 5px;
+            background: transparent;
+        }
+        .excel-preview input:focus {
+            background: #fff;
+            border: 1px solid #007bff;
+            outline: none;
+        }
+        /* Evitar que el Enter en la tabla recargue la página */
+        .excel-preview form {
+            margin: 0;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        #scanner-section {
+            display: none; /* Oculto por defecto */
+            text-align: center;
+        }
+        #video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 20px auto;
+            border: 3px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        #scan-result {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none; /* Oculto por defecto */
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 1.5em;
+            padding: 20px;
+            flex-direction: column;
+        }
+        #scan-result.success { border: 5px solid #28a745; }
+        #scan-result.error { border: 5px solid #dc3545; }
+        #scan-result.warning { border: 5px solid #ffc107; }
+
+        #scan-result h3 { margin: 0; }
+        #scan-result p { margin: 5px 0 0 0; font-size: 0.8em; }
+
+        #progress-counter {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        #file-info {
+            font-weight: bold;
+            color: #28a745;
+        }
+        #report-section {
+            display: none; /* Oculto por defecto */
+        }
+        #report-section h3 {
+            margin-top: 15px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #eee;
+        }
+        #report-section ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        #report-section li {
+            background: #f8f9fa;
+            padding: 8px 12px;
+            border-radius: 4px;
+            margin-bottom: 5px;
+            font-family: monospace;
+        }
+        .completados-title { color: #28a745; }
+        .faltantes-title { color: #dc3545; }
+        .sobrantes-title { color: #ffc107; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>📦 Scanner de Guías</h1>
+
+        <!-- SECCIÓN 1: Carga de Archivo -->
+        <div class="section" id="upload-section">
+            <h2>1. Cargar Archivo</h2>
+            <p>Sube el archivo Excel con las guías a verificar. Columnas requeridas: <strong>guias, destinatario, piezas, peso</strong>. (La columna <strong>observaciones</strong> es opcional).</p>
+            <button onclick="downloadScanTemplate()">📄 Descargar Plantilla</button>
+            <button onclick="document.getElementById('file-input').click()">Seleccionar Excel</button>
+            <input type="file" id="file-input" accept=".xlsx, .xls">
+            <p id="file-info"></p>
+        </div>
+        
+        <!-- SECCIÓN 2: Previsualización y Edición -->
+        <div class="section" id="preview-section" style="display: none;">
+            <h2>2. Editar Datos</h2>
+            <button id="add-row-btn" class="add-btn">+ Agregar Fila</button>
+            <button id="start-local-scan-btn">Empezar Scanner (en este equipo)</button>
+            <button id="generate-qr-btn">📲 Generar Sesión para Celular</button>
+            <div id="data-preview" class="excel-preview"></div>
+        </div>
+
+        <!-- SECCIÓN QR: Generación de Sesión -->
+        <div class="section" id="qr-section" style="display: none; text-align: center;">
+            <h2>Escanea desde tu Celular</h2>
+            <p>Abre la cámara de tu celular y escanea este código QR para continuar el proceso de escaneo en tu móvil.</p>
+            <div id="qrcode" style="display: inline-block; border: 5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
+        </div>
+
+        <!-- SECCIÓN 3: Scanner -->
+        <div class="section" id="scanner-section" style="display: none;">
+            <h2 id="scanner-title">Escanear Paquetes</h2>
+            
+            <div id="progress-counter">Piezas escaneadas: 0/0</div>
+
+            <div id="video-container">
+                <video id="video" playsinline></video>
+                <!-- Pop-up de resultado de escaneo -->
+                <div id="scan-result">
+                    <h3 id="result-title">GUÍA ENCONTRADA</h3>
+                    <p id="result-details">Destinatario: Juan Perez | Piezas: 1/3</p>
+                </div>
+            </div>
+
+            <button id="finish-scan-btn" class="finish-btn">Finalizar</button>
+        </div>
+
+        <!-- SECCIÓN 4: Reporte Final -->
+        <div class="section" id="report-section" style="display: none;">
+            <h2>Reporte Final</h2>
+            
+            <h3 class="completados-title">✅ Guías Completadas</h3>
+            <ul id="completados-list">
+            </ul>
+
+            <h3 class="faltantes-title">❌ Guías Faltantes</h3>
+            <ul id="faltantes-list">
+            </ul>
+
+            <h3 class="sobrantes-title">⚠️ Guías Sobrantes</h3>
+            <ul id="sobrantes-list">
+            </ul>
+        </div>
+    </div>
+
+    <!-- Elementos de Audio -->
+    <audio id="success-sound" src="https://actions.google.com/sounds/v1/basic_sounds/bell_sound.ogg" preload="auto"></audio>
+    <audio id="error-sound" src="https://actions.google.com/sounds/v1/basic_sounds/error_sound_1.ogg" preload="auto"></audio>
+
+    <!-- Librerías JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+
+    <script>
+        // --- Estado de la Aplicación ---
+        let guidesData = new Map();
+        let sobrantes = new Set();
+        let totalPieces = 0;
+        let scannedPieces = 0;
+        const codeReader = new ZXing.BrowserMultiFormatReader();
+        let isScanning = false;
+        let selectedDeviceId;
+
+        // --- Elementos del DOM ---
+        const fileInput = document.getElementById('file-input');
+        const uploadSection = document.getElementById('upload-section');
+        const fileInfo = document.getElementById('file-info');
+        const previewSection = document.getElementById('preview-section');
+        const dataPreview = document.getElementById('data-preview');
+        const scannerSection = document.getElementById('scanner-section');
+        const progressCounter = document.getElementById('progress-counter');
+        const videoElement = document.getElementById('video');
+        const successSound = document.getElementById('success-sound');
+        const errorSound = document.getElementById('error-sound');
+        const finishScanBtn = document.getElementById('finish-scan-btn');
+        const reportSection = document.getElementById('report-section');
+        const completadosList = document.getElementById('completados-list');
+        const faltantesList = document.getElementById('faltantes-list');
+        const sobrantesList = document.getElementById('sobrantes-list');
+        const addRowBtn = document.getElementById('add-row-btn');
+        const startLocalScanBtn = document.getElementById('start-local-scan-btn');
+        const generateQrBtn = document.getElementById('generate-qr-btn');
+        const qrSection = document.getElementById('qr-section');
+        const qrCodeDiv = document.getElementById('qrcode');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkForSessionData();
+        });
+
+        function resetUI() {
+            // Oculta todas las secciones excepto la de carga inicial
+            previewSection.style.display = 'none';
+            qrSection.style.display = 'none';
+            scannerSection.style.display = 'none';
+            reportSection.style.display = 'none';
+
+            // Muestra la sección de carga
+            uploadSection.style.display = 'block';
+
+            // Limpia información de archivo anterior
+            fileInfo.textContent = '';
+        }
+
+        function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    // Reiniciar la interfaz al cargar un nuevo archivo
+                    resetUI();
+
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (jsonData.length === 0) {
+                        throw new Error("El archivo Excel está vacío.");
+                    }
+
+                    const requiredColumns = ['guias', 'destinatario', 'piezas', 'peso'];
+                    const fileColumns = Object.keys(jsonData[0]);
+                    const missingColumns = requiredColumns.filter(col => !fileColumns.includes(col));
+
+                    if (missingColumns.length > 0) {
+                        throw new Error(`Faltan las siguientes columnas requeridas: ${missingColumns.join(', ')}`);
+                    }
+
+                    guidesData = new Map();
+                    jsonData.forEach(row => {
+                        const guideId = String(row.guias).trim();
+                        if (guideId) {
+                            guidesData.set(guideId, {
+                                destinatario: row.destinatario || '',
+                                piezas: parseInt(row.piezas, 10) || 1,
+                                peso: row.peso || '',
+                                observaciones: row.observaciones || '',
+                                scannedCount: 0,
+                                status: 'pendiente'
+                            });
+                        }
+                    });
+
+                    fileInfo.textContent = `✅ Archivo cargado. ${guidesData.size} guías listas para editar.`;
+                    uploadSection.style.display = 'none';
+                    previewSection.style.display = 'block';
+                    showPreview();
+
+                } catch (error) {
+                    alert(`Error al procesar el archivo: ${error.message}`);
+                    fileInfo.textContent = '';
+                    previewSection.style.display = 'none';
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function showPreview() {
+            const headers = ['guias', 'destinatario', 'piezas', 'peso', 'observaciones'];
+            // Usar un formulario para prevenir que "Enter" recargue la página
+            let tableHTML = '<form onsubmit="event.preventDefault();"><table><thead><tr>';
+            headers.forEach(h => tableHTML += `<th>${h}</th>`);
+            tableHTML += '<th>Acciones</th></tr></thead><tbody>';
+
+            guidesData.forEach((guide, guideId) => {
+                tableHTML += `<tr>
+                    <td><input type="text" value="${guideId}" onchange="updateGuideId('${guideId}', this.value)"></td>
+                    <td><input type="text" value="${guide.destinatario}" onchange="updateCell('${guideId}', 'destinatario', this.value)"></td>
+                    <td><input type="number" value="${guide.piezas}" onchange="updateCell('${guideId}', 'piezas', this.value)"></td>
+                    <td><input type="text" value="${guide.peso}" onchange="updateCell('${guideId}', 'peso', this.value)"></td>
+                    <td><input type="text" value="${guide.observaciones}" onchange="updateCell('${guideId}', 'observaciones', this.value)"></td>
+                    <td><button class="delete-btn" onclick="deleteRow('${guideId}')">Eliminar</button></td>
+                </tr>`;
+            });
+
+            tableHTML += '</tbody></table></form>';
+            dataPreview.innerHTML = tableHTML;
+        }
+
+        function updateCell(guideId, column, value) {
+            if (guidesData.has(guideId)) {
+                const guide = guidesData.get(guideId);
+                guide[column] = (column === 'piezas') ? parseInt(value, 10) || 1 : value;
+            }
+        }
+
+        function updateGuideId(oldId, newId) {
+            newId = newId.trim();
+            if (!newId || (newId !== oldId && guidesData.has(newId))) {
+                alert("El nuevo ID de guía no puede estar vacío o ya existir.");
+                showPreview();
+                return;
+            }
+            const guideData = guidesData.get(oldId);
+            guidesData.delete(oldId);
+            guidesData.set(newId, guideData);
+        }
+
+        function deleteRow(guideId) {
+            if (confirm(`¿Seguro que quieres eliminar la guía ${guideId}?`)) {
+                guidesData.delete(guideId);
+                showPreview();
+            }
+        }
+
+        addRowBtn.addEventListener('click', () => {
+            const newId = prompt("Introduce el nuevo número de guía:");
+            if (newId && !guidesData.has(newId)) {
+                guidesData.set(newId, {
+                    destinatario: '',
+                    piezas: 1,
+                    peso: '',
+                    observaciones: '',
+                    scannedCount: 0,
+                    status: 'pendiente'
+                });
+                showPreview();
+            } else if (newId) {
+                alert("Ese número de guía ya existe.");
+            }
+        });
+
+        startLocalScanBtn.addEventListener('click', () => {
+            prepareAndStartScanner();
+        });
+
+        generateQrBtn.addEventListener('click', () => {
+            generateQrSession();
+        });
+
+        function prepareAndStartScanner() {
+            uploadSection.style.display = 'none';
+            previewSection.style.display = 'none';
+            scannerSection.style.display = 'block';
+            
+            totalPieces = 0;
+            guidesData.forEach(guide => {
+                totalPieces += guide.piezas;
+            });
+            progressCounter.textContent = `Piezas escaneadas: 0/${totalPieces}`;
+
+            startScanner();
+        }
+
+        // --- Lógica de Sincronización por QR ---
+        function generateQrSession() {
+            if (guidesData.size === 0) {
+                alert("No hay datos para generar una sesión.");
+                return;
+            }
+
+            const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
+            const jsonString = JSON.stringify(dataArray);
+
+            const compressed = pako.deflate(jsonString, { to: 'string' });
+            const encodedData = btoa(compressed);
+
+            const url = new URL(window.location.href);
+            url.searchParams.set('session', encodedData);
+
+            qrCodeDiv.innerHTML = '';
+            const qr = qrcode(0, 'L');
+            qr.addData(url.href);
+            qr.make();
+            qrCodeDiv.innerHTML = qr.createImgTag(6, 10);
+
+            previewSection.style.display = 'none';
+            qrSection.style.display = 'block';
+        }
+
+        function checkForSessionData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const sessionData = urlParams.get('session');
+
+            if (sessionData) {
+                try {
+                const compressed = atob(sessionData);
+                const jsonString = pako.inflate(compressed, { to: 'string' });
+                const dataArray = JSON.parse(jsonString);
+
+                guidesData.clear();
+                dataArray.forEach(item => {
+                const { id, ...rest } = item;
+                guidesData.set(id, rest);
+                });
+                
+                prepareAndStartScanner();
+
+                } catch (e) {
+                    console.error("Error al decodificar la sesión desde la URL:", e);
+                    alert("La sesión en la URL es inválida o está corrupta.");
+                }
+            }
+        }
+        fileInput.addEventListener('change', handleFile);
+
+        function downloadScanTemplate() {
+            const headers = ['guias', 'destinatario', 'piezas', 'peso', 'observaciones'];
+            const exampleData = [{'guias': 'AWB123456789', 'destinatario': 'Maria Rodriguez', 'piezas': 3, 'peso': 5.5, 'observaciones': 'Contenido frágil'}];
+            const worksheet = XLSX.utils.json_to_sheet(exampleData, { header: headers });
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Plantilla");
+            XLSX.writeFile(workbook, "Plantilla_Scanner.xlsx");
+        }
+
+        // --- Lógica del Scanner ---
+        async function startScanner() {
+            isScanning = true;
+            try {
+                const videoInputDevices = await codeReader.listVideoInputDevices();
+                selectedDeviceId = videoInputDevices[0].deviceId;
+                
+                codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+                    if (result) {
+                        codeReader.reset();
+                        handleScanResult(result.getText());
+                        
+                        setTimeout(() => {
+                            if (isScanning) {
+                                startScanner();
+                            }
+                        }, 2000);
+                    }
+                    if (err && !(err instanceof ZXing.NotFoundException)) {
+                        console.error(err);
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error al iniciar el scanner:", error);
+                alert("No se pudo acceder a la cámara. Asegúrate de dar los permisos necesarios.");
+                isScanning = false;
+            }
+        }
+
+        function handleScanResult(scannedCode) {
+            const guide = guidesData.get(scannedCode);
+
+            if (guide) {
+                if (guide.scannedCount >= guide.piezas) {
+                    showResultPopup(`GUÍA COMPLETA: ${scannedCode}`, `Ya se escanearon todas las piezas (${guide.piezas}/${guide.piezas})`, 'warning');
+                    errorSound.play();
+                } else {
+                    guide.scannedCount++;
+                    scannedPieces++;
+                    if (guide.scannedCount === guide.piezas) {
+                        guide.status = 'completo';
+                    } else {
+                        guide.status = 'incompleto';
+                    }
+                    showResultPopup(`GUÍA: ${scannedCode}`, `Dest: ${guide.destinatario} | Piezas: ${guide.scannedCount}/${guide.piezas}`, 'success');
+                    successSound.play();
+                    progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
+                }
+            } else {
+                sobrantes.add(scannedCode);
+                showResultPopup(`SOBRANTE: ${scannedCode}`, 'Esta guía no está en la lista cargada.', 'error');
+                errorSound.play();
+            }
+        }
+
+        function showResultPopup(title, details, type) {
+            const resultDiv = document.getElementById('scan-result');
+            const resultTitle = document.getElementById('result-title');
+            const resultDetails = document.getElementById('result-details');
+
+            resultTitle.textContent = title;
+            resultDetails.textContent = details;
+            
+            resultDiv.className = '';
+            resultDiv.classList.add(type);
+            resultDiv.style.display = 'flex';
+
+            setTimeout(() => {
+                resultDiv.style.display = 'none';
+            }, 6000);
+        }
+
+        // --- Lógica de Finalización y Reporte ---
+        finishScanBtn.addEventListener('click', () => {
+            if (!isScanning && guidesData.size === 0) {
+                alert("No hay datos cargados para generar un reporte.");
+                return;
+            }
+
+            isScanning = false;
+            codeReader.reset();
+            videoElement.srcObject = null;
+
+            scannerSection.style.display = 'none';
+            reportSection.style.display = 'block';
+
+            completadosList.innerHTML = '';
+            faltantesList.innerHTML = '';
+            sobrantesList.innerHTML = '';
+
+            guidesData.forEach((guide, guideId) => {
+                if (guide.status === 'completo') {
+                    completadosList.innerHTML += `<li>${guideId}</li>`;
+                } else {
+                    const faltan = guide.piezas - guide.scannedCount;
+                    faltantesList.innerHTML += `<li>${guideId} (Faltan ${faltan} de ${guide.piezas})</li>`;
+                }
+            });
+
+            sobrantes.forEach(sobranteId => {
+                sobrantesList.innerHTML += `<li>${sobranteId}</li>`;
+            });
+
+            alert("Proceso de escaneo finalizado. El reporte está listo.");
+        });
+    </script>
+
+</body>
+</html>
