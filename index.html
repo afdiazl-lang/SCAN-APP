@@ -213,14 +213,14 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.9</h1>
+        <h1>📦 Scanner de Guías v2.0</h1>
 
-        <!-- SECCIÓN DE CARGA DE SESIÓN MANUAL -->
-        <div class="section" id="session-load-section">
-            <h2>Cargar Sesión Manual</h2>
-            <p>Pega aquí los datos de la sesión generados en tu otro equipo.</p>
-            <textarea id="session-input" rows="4" style="width: 98%; font-family: monospace; font-size: 12px;"></textarea>
-            <button id="load-session-btn">Cargar y Empezar a Escanear</button>
+        <!-- SECCIÓN DE CARGA DESDE LA NUBE -->
+        <div class="section" id="cloud-load-section">
+            <h2>Cargar Sesión desde la Nube</h2>
+            <p>Introduce el código de sesión generado en tu otro equipo.</p>
+            <input type="text" id="session-code-input" placeholder="ABC-123" style="font-size: 1.5em; text-align: center; text-transform: uppercase; width: 95%; padding: 10px;">
+            <button id="load-from-cloud-btn">Cargar desde la Nube</button>
         </div>
 
         <!-- SECCIÓN 1: Carga de Archivo -->
@@ -238,7 +238,7 @@
             <h2>2. Editar Datos</h2>
             <button id="add-row-btn" class="add-btn">+ Agregar Fila</button>
             <button id="start-local-scan-btn">Empezar Scanner (en este equipo)</button>
-            <button id="copy-session-btn">📲 Copiar Sesión para Celular</button>
+            <button id="generate-cloud-code-btn">📲 Generar Código de Nube</button>
             <div id="data-preview" class="excel-preview"></div>
         </div>
 
@@ -291,6 +291,8 @@
     <!-- Librerías JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
 
     <script>
         // --- Estado de la Aplicación ---
@@ -304,10 +306,27 @@
         let videoInputDevices = [];
         let currentDeviceIndex = 0;
 
+        // --- Configuración de Firebase ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAaBWYZjGT-cdQZEPbfnxYleGUx4_JZhos",
+            authDomain: "scanner-de-guias.firebaseapp.com",
+            databaseURL: "https://scanner-de-guias-default-rtdb.firebaseio.com",
+            projectId: "scanner-de-guias",
+            storageBucket: "scanner-de-guias.appspot.com",
+            messagingSenderId: "54795357818",
+            appId: "1:54795357818:web:958942987f3e8cbabcb5c3",
+            measurementId: "G-FQ2WVQD66C"
+        };
+
+        // Inicializar Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
         // --- Elementos del DOM ---
         const fileInput = document.getElementById('file-input');
-        const sessionLoadSection = document.getElementById('session-load-section');
-        const sessionInput = document.getElementById('session-input');
+        const cloudLoadSection = document.getElementById('cloud-load-section');
+        const sessionCodeInput = document.getElementById('session-code-input');
+        const loadFromCloudBtn = document.getElementById('load-from-cloud-btn');
         const uploadSection = document.getElementById('upload-section');
         const fileInfo = document.getElementById('file-info');
         const previewSection = document.getElementById('preview-section');
@@ -325,7 +344,7 @@
         const sobrantesList = document.getElementById('sobrantes-list');
         const addRowBtn = document.getElementById('add-row-btn');
         const startLocalScanBtn = document.getElementById('start-local-scan-btn');
-        const copySessionBtn = document.getElementById('copy-session-btn');
+        const generateCloudCodeBtn = document.getElementById('generate-cloud-code-btn');
         const switchCamBtn = document.getElementById('switch-cam-btn');
         const completadosSummary = document.getElementById('completados-summary');
 
@@ -337,7 +356,7 @@
 
             // Muestra la sección de carga
             uploadSection.style.display = 'block';
-            sessionLoadSection.style.display = 'block';
+            cloudLoadSection.style.display = 'block';
 
             // Limpia información de archivo anterior
             fileInfo.textContent = '';
@@ -387,7 +406,7 @@
 
                     fileInfo.textContent = `✅ Archivo cargado. ${guidesData.size} guías listas para editar.`;
                     uploadSection.style.display = 'none';
-                    sessionLoadSection.style.display = 'none';
+                    cloudLoadSection.style.display = 'none';
                     previewSection.style.display = 'block';
                     showPreview();
 
@@ -469,83 +488,90 @@
             prepareAndStartScanner();
         });
 
-        copySessionBtn.addEventListener('click', function() {
+        generateCloudCodeBtn.addEventListener('click', function() {
             if (guidesData.size === 0) {
                 alert("No hay datos para generar una sesión.");
                 return;
             }
-            
-            try {
-                const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
-                const jsonString = JSON.stringify(dataArray);
 
-                // Solución moderna y robusta para codificar a Base64 con soporte Unicode
-                const encoder = new TextEncoder();
-                const data = encoder.encode(jsonString);
-                const base64String = btoa(String.fromCharCode.apply(null, data));
+            // Generar un código aleatorio y legible
+            const chars = 'ABCDEFGHIJKLMNPQRSTUVWXYZ';
+            const nums = '123456789';
+            let code = '';
+            for (let i = 0; i < 3; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+            code += '-';
+            for (let i = 0; i < 3; i++) code += nums.charAt(Math.floor(Math.random() * nums.length));
 
-                navigator.clipboard.writeText(base64String).then(() => {
-                    alert("✅ Sesión copiada al portapapeles.\n\nPega este texto en tu celular (usando WhatsApp, Notas, etc.) y cárgalo en la sección 'Cargar Sesión Manual'.");
-                }).catch(err => {
-                    alert("Error al copiar la sesión. Inténtalo de nuevo.");
-                    console.error('Error al copiar:', err);
-                });
+            this.disabled = true;
+            this.textContent = 'Subiendo...';
 
-            } catch (e) {
-                console.error("Error al generar la sesión:", e);
-                alert("Ocurrió un error al generar la sesión para copiar.");
-            }
+            const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
+
+            database.ref('sessions/' + code).set({
+                createdAt: firebase.database.ServerValue.TIMESTAMP,
+                guides: dataArray
+            }).then(() => {
+                alert(`✅ ¡Código de sesión generado!\n\nIntroduce este código en tu celular: ${code}`);
+                this.disabled = false;
+                this.textContent = '📲 Generar Código de Nube';
+            }).catch(error => {
+                alert('Error al subir la sesión a la nube: ' + error.message);
+                this.disabled = false;
+                this.textContent = '📲 Generar Código de Nube';
+            });
         });
 
         function prepareAndStartScanner() {
             uploadSection.style.display = 'none';
             previewSection.style.display = 'none';
-            sessionLoadSection.style.display = 'none';
+            cloudLoadSection.style.display = 'none';
             scannerSection.style.display = 'block';
             
             totalPieces = 0;
             guidesData.forEach(guide => {
                 totalPieces += guide.piezas;
             });
-            progressCounter.textContent = `Piezas escaneadas: 0/${totalPieces}`;
+            progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
 
             startScanner();
         }
 
-        const loadSessionBtn = document.getElementById('load-session-btn');
-        loadSessionBtn.addEventListener('click', () => {
-            const sessionData = sessionInput.value.trim();
-            if (!sessionData) {
-                alert("Por favor, pega los datos de la sesión en el campo de texto.");
+        loadFromCloudBtn.addEventListener('click', () => {
+            const code = sessionCodeInput.value.trim().toUpperCase();
+            if (!code) {
+                alert("Por favor, introduce un código de sesión.");
                 return;
             }
 
-            try {
-                // Reiniciar estado antes de cargar nueva sesión
-                sobrantes.clear();
-                scannedPieces = 0;
-                guidesData.clear();
+            loadFromCloudBtn.disabled = true;
+            loadFromCloudBtn.textContent = 'Cargando...';
 
-                // Solución moderna y robusta para decodificar desde Base64 con soporte Unicode
-                const binaryString = atob(sessionData);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {
-                    bytes[i] = binaryString.charCodeAt(i);
+            const sessionRef = database.ref('sessions/' + code);
+            sessionRef.once('value').then(snapshot => {
+                if (snapshot.exists()) {
+                    const dataArray = snapshot.val().guides;
+                    
+                    sobrantes.clear();
+                    scannedPieces = 0;
+                    guidesData.clear();
+
+                    dataArray.forEach(item => {
+                        const { id, ...rest } = item;
+                        guidesData.set(id, rest);
+                    });
+
+                    prepareAndStartScanner();
+                    sessionRef.remove(); // Limpiar la sesión de la base de datos
+
+                } else {
+                    alert("Código de sesión no encontrado o ya fue utilizado.");
                 }
-                const jsonString = new TextDecoder().decode(bytes);
-                const dataArray = JSON.parse(jsonString);
-
-                dataArray.forEach(item => {
-                    const { id, ...rest } = item;
-                    guidesData.set(id, rest);
-                });
-                
-                prepareAndStartScanner();
-
-            } catch (e) {
-                console.error("Error al decodificar la sesión:", e);
-                alert("Los datos de la sesión son inválidos o están corruptos. Por favor, cópialos de nuevo.");
-            }
+            }).catch(error => {
+                alert("Error al cargar la sesión: " + error.message);
+            }).finally(() => {
+                loadFromCloudBtn.disabled = false;
+                loadFromCloudBtn.textContent = 'Cargar desde la Nube';
+            });
         });
         fileInput.addEventListener('change', handleFile);
 
