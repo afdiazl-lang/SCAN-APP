@@ -213,7 +213,15 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v1.4</h1>
+        <h1>📦 Scanner de Guías v1.6</h1>
+
+        <!-- SECCIÓN DE CARGA DE SESIÓN MANUAL -->
+        <div class="section" id="session-load-section">
+            <h2>Cargar Sesión Manual</h2>
+            <p>Pega aquí los datos de la sesión generados en tu otro equipo.</p>
+            <textarea id="session-input" rows="4" style="width: 98%; font-family: monospace; font-size: 12px;"></textarea>
+            <button id="load-session-btn">Cargar y Empezar a Escanear</button>
+        </div>
 
         <!-- SECCIÓN 1: Carga de Archivo -->
         <div class="section" id="upload-section">
@@ -230,15 +238,8 @@
             <h2>2. Editar Datos</h2>
             <button id="add-row-btn" class="add-btn">+ Agregar Fila</button>
             <button id="start-local-scan-btn">Empezar Scanner (en este equipo)</button>
-            <button id="generate-qr-btn">📲 Generar Sesión para Celular</button>
+            <button id="copy-session-btn">📲 Copiar Sesión para Celular</button>
             <div id="data-preview" class="excel-preview"></div>
-        </div>
-
-        <!-- SECCIÓN QR: Generación de Sesión -->
-        <div class="section" id="qr-section" style="display: none; text-align: center;">
-            <h2>Escanea desde tu Celular</h2>
-            <p>Abre la cámara de tu celular y escanea este código QR para continuar el proceso de escaneo en tu móvil.</p>
-            <div id="qrcode" style="display: inline-block; border: 5px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
         </div>
 
         <!-- SECCIÓN 3: Scanner -->
@@ -290,7 +291,6 @@
     <!-- Librerías JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 
     <script>
         // --- Estado de la Aplicación ---
@@ -306,6 +306,8 @@
 
         // --- Elementos del DOM ---
         const fileInput = document.getElementById('file-input');
+        const sessionLoadSection = document.getElementById('session-load-section');
+        const sessionInput = document.getElementById('session-input');
         const uploadSection = document.getElementById('upload-section');
         const fileInfo = document.getElementById('file-info');
         const previewSection = document.getElementById('preview-section');
@@ -323,25 +325,19 @@
         const sobrantesList = document.getElementById('sobrantes-list');
         const addRowBtn = document.getElementById('add-row-btn');
         const startLocalScanBtn = document.getElementById('start-local-scan-btn');
-        const generateQrBtn = document.getElementById('generate-qr-btn');
+        const copySessionBtn = document.getElementById('copy-session-btn');
         const switchCamBtn = document.getElementById('switch-cam-btn');
-        const qrSection = document.getElementById('qr-section');
-        const qrCodeDiv = document.getElementById('qrcode');
         const completadosSummary = document.getElementById('completados-summary');
-
-        document.addEventListener('DOMContentLoaded', () => {
-            checkForSessionData();
-        });
 
         function resetUI() {
             // Oculta todas las secciones excepto la de carga inicial
             previewSection.style.display = 'none';
-            qrSection.style.display = 'none';
             scannerSection.style.display = 'none';
             reportSection.style.display = 'none';
 
             // Muestra la sección de carga
             uploadSection.style.display = 'block';
+            sessionLoadSection.style.display = 'block';
 
             // Limpia información de archivo anterior
             fileInfo.textContent = '';
@@ -392,6 +388,7 @@
 
                     fileInfo.textContent = `✅ Archivo cargado. ${guidesData.size} guías listas para editar.`;
                     uploadSection.style.display = 'none';
+                    sessionLoadSection.style.display = 'none';
                     previewSection.style.display = 'block';
                     showPreview();
 
@@ -473,13 +470,28 @@
             prepareAndStartScanner();
         });
 
-        generateQrBtn.addEventListener('click', () => {
-            generateQrSession();
+        copySessionBtn.addEventListener('click', function() {
+            if (guidesData.size === 0) {
+                alert("No hay datos para generar una sesión.");
+                return;
+            }
+            
+            const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
+            const jsonString = JSON.stringify(dataArray);
+            const encodedData = btoa(unescape(encodeURIComponent(jsonString)));
+
+            navigator.clipboard.writeText(encodedData).then(() => {
+                alert("✅ Sesión copiada al portapapeles.\n\nPega este texto en tu celular (usando WhatsApp, Notas, etc.) y cárgalo en la sección 'Cargar Sesión Manual'.");
+            }).catch(err => {
+                alert("Error al copiar la sesión. Inténtalo de nuevo.");
+                console.error('Error al copiar:', err);
+            });
         });
 
         function prepareAndStartScanner() {
             uploadSection.style.display = 'none';
             previewSection.style.display = 'none';
+            sessionLoadSection.style.display = 'none';
             scannerSection.style.display = 'block';
             
             totalPieces = 0;
@@ -491,54 +503,31 @@
             startScanner();
         }
 
-        // --- Lógica de Sincronización por QR ---
-        function generateQrSession() {
-            if (guidesData.size === 0) {
-                alert("No hay datos para generar una sesión.");
+        const loadSessionBtn = document.getElementById('load-session-btn');
+        loadSessionBtn.addEventListener('click', () => {
+            const sessionData = sessionInput.value.trim();
+            if (!sessionData) {
+                alert("Por favor, pega los datos de la sesión en el campo de texto.");
                 return;
             }
 
-            const dataArray = Array.from(guidesData.entries()).map(([id, data]) => ({ id, ...data }));
-            const jsonString = JSON.stringify(dataArray);
-
-            const encodedData = encodeURIComponent(btoa(unescape(encodeURIComponent(jsonString))));
-
-            const url = new URL(window.location.href);
-            url.searchParams.set('session', encodedData);
-
-            qrCodeDiv.innerHTML = '';
-            const qr = qrcode(0, 'L');
-            qr.addData(url.href);
-            qr.make();
-            qrCodeDiv.innerHTML = qr.createImgTag(6, 10);
-
-            previewSection.style.display = 'none';
-            qrSection.style.display = 'block';
-        }
-
-        function checkForSessionData() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const sessionData = urlParams.get('session');
-
-            if (sessionData) {
-                try {
-                const jsonString = decodeURIComponent(escape(atob(decodeURIComponent(sessionData))));
+            try {
+                const jsonString = decodeURIComponent(escape(atob(sessionData)));
                 const dataArray = JSON.parse(jsonString);
 
                 guidesData.clear();
                 dataArray.forEach(item => {
-                const { id, ...rest } = item;
-                guidesData.set(id, rest);
+                    const { id, ...rest } = item;
+                    guidesData.set(id, rest);
                 });
                 
                 prepareAndStartScanner();
 
-                } catch (e) {
-                    console.error("Error al decodificar la sesión desde la URL:", e);
-                    alert("La sesión en la URL es inválida o está corrupta.");
-                }
+            } catch (e) {
+                console.error("Error al decodificar la sesión:", e);
+                alert("Los datos de la sesión son inválidos o están corruptos. Por favor, cópialos de nuevo.");
             }
-        }
+        });
         fileInput.addEventListener('change', handleFile);
 
         function downloadScanTemplate() {
