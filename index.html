@@ -129,19 +129,17 @@
             display: block;
         }
         #scan-result {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: rgba(0, 0, 0, 0.75);
-            color: white;
+            /* MEJORA: Ya no es flotante, es un bloque estático */
             display: none; /* Oculto por defecto */
+            padding: 15px;
+            margin: 0 auto 20px auto; /* Centrado y con margen inferior */
+            max-width: 640px;
+            border-radius: 8px;
+            color: white;
             text-align: center;
             font-size: 1.2em;
-            padding: 15px;
-            z-index: 10;
-            transform: translateY(-100%);
-            transition: transform 0.5s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            /* Se elimina la animación de transform/transition */
         }
         #viewfinder {
             position: absolute;
@@ -213,7 +211,7 @@
 <body>
 
     <div class="container">
-        <h1>📦 Scanner de Guías v2.2</h1>
+        <h1>📦 Scanner de Guías v2.5</h1>
 
         <!-- SECCIÓN DE CARGA DESDE LA NUBE -->
         <div class="section" id="cloud-load-section">
@@ -248,14 +246,24 @@
             
             <div id="progress-counter">Piezas escaneadas: 0/0</div>
 
+            <!-- MEJORA: El cuadro de resultado ahora está fuera y encima del video -->
+            <div id="scan-result">
+                <h3 id="result-title">GUÍA ENCONTRADA</h3>
+                <p id="result-details">Destinatario: Juan Perez | Piezas: 1/3</p>
+            </div>
+
+            <!-- MODO CÁMARA -->
             <div id="video-container">
                 <video id="video" playsinline></video>
-                <!-- Pop-up de resultado de escaneo -->
                 <div id="viewfinder"></div>
-                <div id="scan-result">
-                    <h3 id="result-title">GUÍA ENCONTRADA</h3>
-                    <p id="result-details">Destinatario: Juan Perez | Piezas: 1/3</p>
-                </div>
+            </div>
+
+            <!-- MODO PISTOLA SCANNER -->
+            <div id="pistola-container" style="display: none; margin: 20px auto; max-width: 640px;">
+                <p>El modo pistola está activo. Asegúrate de que tu scanner esté conectado.</p>
+                <form id="pistola-form">
+                    <input type="text" id="pistola-input" placeholder="Esperando código..." style="width: 95%; font-size: 1.5em; text-align: center; padding: 10px;">
+                </form>
             </div>
 
             <div class="button-group" style="justify-content: center;">
@@ -315,6 +323,7 @@
         let selectedDeviceId;
         let videoInputDevices = [];
         let currentDeviceIndex = 0;
+        let currentScanMode = 'camera'; // 'camera' o 'pistol'
 
         // --- Configuración de Firebase ---
         const firebaseConfig = {
@@ -357,6 +366,9 @@
         const generateCloudCodeBtn = document.getElementById('generate-cloud-code-btn');
         const switchCamBtn = document.getElementById('switch-cam-btn');
         const completadosSummary = document.getElementById('completados-summary');
+        const pistolaContainer = document.getElementById('pistola-container');
+        const pistolaInput = document.getElementById('pistola-input');
+        const pistolaForm = document.getElementById('pistola-form');
 
         function resetUI() {
             // Oculta todas las secciones excepto la de carga inicial
@@ -549,7 +561,15 @@
             progressCounter.textContent = `Piezas escaneadas: ${scannedPieces}/${totalPieces}`;
             // --- FIN DE CORRECCIÓN ---
 
-            startScanner();
+            // CORRECCIÓN: Reanudar en el modo correcto
+            if (currentScanMode === 'camera') {
+                startScanner();
+            } else {
+                // Reanudar en modo pistola
+                document.getElementById('video-container').style.display = 'none';
+                document.getElementById('pistola-container').style.display = 'block';
+                pistolaInput.focus();
+            }
         }
 
         loadFromCloudBtn.addEventListener('click', () => {
@@ -615,6 +635,53 @@
             prepareAndStartScanner();
         });
 
+        // --- Lógica para el modo Pistola Scanner ---
+        function toggleScanMode() {
+            const videoContainer = document.getElementById('video-container');
+            const pistolaContainer = document.getElementById('pistola-container');
+            const thisButton = document.getElementById('toggle-mode-btn');
+
+            if (videoContainer.style.display !== 'none') {
+                // Cambiar a modo pistola
+                videoContainer.style.display = 'none';
+                pistolaContainer.style.display = 'block';
+                // CORRECCIÓN: Ocultar el botón de cambio de cámara porque es irrelevante en modo pistola
+                switchCamBtn.style.display = 'none';
+                thisButton.textContent = '📷 Usar Cámara';
+                currentScanMode = 'pistol';
+                isScanning = false; // Detener el procesamiento de la cámara
+                codeReader.reset();
+                pistolaInput.focus();
+            } else {
+                // Cambiar a modo cámara
+                videoContainer.style.display = 'block';
+                pistolaContainer.style.display = 'none';
+                thisButton.textContent = '🔫 Usar Pistola Scanner';
+                // CORRECCIÓN: La visibilidad del botón de cambio de cámara se gestiona aquí y en startScanner
+                currentScanMode = 'camera';
+                if (videoInputDevices.length > 1) {
+                    switchCamBtn.style.display = 'inline-block';
+                }
+                startScanner(); // Reiniciar la cámara
+            }
+        }
+
+        // Crear y añadir el botón de cambio de modo dinámicamente
+        const toggleModeBtn = document.createElement('button');
+        toggleModeBtn.id = 'toggle-mode-btn';
+        toggleModeBtn.textContent = '🔫 Usar Pistola Scanner';
+        toggleModeBtn.onclick = toggleScanMode;
+        switchCamBtn.insertAdjacentElement('afterend', toggleModeBtn);
+
+        pistolaForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const scannedCode = pistolaInput.value.trim();
+            if (scannedCode) {
+                handleScanResult(scannedCode);
+                pistolaInput.value = ''; // Limpiar para el siguiente escaneo
+            }
+        });
+
         // --- Lógica del Scanner ---
         async function startScanner() {
             isScanning = true;
@@ -622,7 +689,12 @@
                 // CORRECCIÓN: Asegurar que la lista de cámaras se carga una sola vez
                 if (videoInputDevices.length === 0) {
                     videoInputDevices = await codeReader.listVideoInputDevices();
-                    switchCamBtn.style.display = videoInputDevices.length > 1 ? 'inline-block' : 'none';
+                }
+
+                // CORRECCIÓN FINAL: Gestionar visibilidad del botón de cambio de cámara aquí
+                const showSwitchCam = currentScanMode === 'camera' && videoInputDevices.length > 1;
+                if (switchCamBtn) {
+                    switchCamBtn.style.display = showSwitchCam ? 'inline-block' : 'none';
                 }
                 
                 // --- OPTIMIZACIÓN DE LA CÁMARA ---
@@ -712,10 +784,10 @@
             resultDiv.className = '';
             resultDiv.classList.add(type);
             resultDiv.style.display = 'block';
-            resultDiv.style.transform = 'translateY(0)';
 
             setTimeout(() => {
-                resultDiv.style.transform = 'translateY(-100%)';
+                // Simplemente lo oculta después del tiempo
+                resultDiv.style.display = 'none';
             }, 6000);
         }
 
